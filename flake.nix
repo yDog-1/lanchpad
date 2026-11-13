@@ -69,6 +69,7 @@
               pkgs.gopls
               pkgs.gotools
               pkgs.nixfmt
+              pkgs.nix-update
             ];
           };
         }

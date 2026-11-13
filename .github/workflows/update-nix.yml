@@ -1,0 +1,80 @@
+name: Update Nix dependencies
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - go.mod
+      - go.sum
+      - flake.nix
+      - flake.lock
+      - .github/workflows/update-nix.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-nix
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31.11.5
+      - name: Update flake inputs
+        if: github.event_name != 'push'
+        run: nix flake update
+      - name: Refresh Go dependency hash
+        run: nix develop --command nix-update --flake --version=skip --override-filename flake.nix lanchpad
+      - name: Format Nix expression
+        run: nix fmt flake.nix
+      - name: Validate updated package
+        run: |
+          nix flake check --all-systems --no-build
+          nix flake check --print-build-logs
+          nix build --no-link --print-build-logs
+      - name: Create or update pull request
+        id: update-pr
+        uses: peter-evans/create-pull-request@v8.1.3
+        with:
+          branch: automation/update-nix
+          base: main
+          delete-branch: true
+          add-paths: |
+            flake.lock
+            flake.nix
+          commit-message: "chore: update Nix dependencies"
+          title: "chore: update Nix dependencies"
+          body: |
+            Update flake inputs and refresh the Go vendorHash when necessary.
+
+            Before creating this PR, the update workflow evaluated all supported
+            systems and built and tested the package on x86_64 Linux.
+
+            The workflow requests automatic squash merge for this exact PR head.
+            Without branch protection, it merges immediately after validation.
+            With branch protection, GitHub waits for the required checks and reviews.
+
+            This PR uses GITHUB_TOKEN, so pull_request workflows do not run
+            automatically. If branch protection requires them, close and reopen
+            the PR to trigger those checks.
+      - name: Enable automatic merge
+        if: steps.update-pr.outputs.pull-request-number && steps.update-pr.outputs.pull-request-head-sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.update-pr.outputs.pull-request-number }}
+          PR_HEAD_SHA: ${{ steps.update-pr.outputs.pull-request-head-sha }}
+        run: gh pr merge "$PR_NUMBER" --auto --squash --match-head-commit "$PR_HEAD_SHA"
