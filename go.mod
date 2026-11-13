@@ -1,4 +1,4 @@
-module github.com/ydog-1/discordgo-learning
+module github.com/yDog-1/lanchpad
 
 go 1.26.10
 
