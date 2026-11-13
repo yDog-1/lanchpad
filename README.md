@@ -5,6 +5,40 @@ Lanchpad は、Discord を窓口にして LAN 内の PC を操作するための
 
 現在は、登録した PC に Wake-on-LAN のマジックパケットを送信するプロトタイプです。
 
+## Nix で開発・ビルドする
+
+flakes と nix-command を有効にした Nix を使います。
+`flake.lock` で nixpkgs と Go のバージョンを固定しています。
+
+```sh
+nix develop
+go test ./...
+```
+
+開発環境には Go、gopls、gotools、nixfmt が含まれます。
+direnv を使う場合は `direnv allow` を実行してください。
+`.envrc` は開発環境と、存在する場合だけ `.env` を読み込みます。
+`nix develop` 単体では `.env` を読み込まないため、起動時は後述の手順で環境変数を設定してください。
+
+配布用パッケージをビルドします。ビルド時に Go のテストも実行します。
+
+```sh
+nix build
+./result/bin/lanchpad
+```
+
+起動には、後述の環境変数の設定が必要です。
+`nix run .` でも起動できます。プロファイルにインストールする場合は `nix profile add .#lanchpad` を使います。
+`.env` はビルドソースやパッケージに含めません。
+生成物は Nix パッケージです。別のマシンへの配布には Nix が必要です。
+
+```sh
+nix flake check
+nix fmt flake.nix
+```
+
+Linux と macOS の x86_64、aarch64 向けの出力を定義しています。
+
 ## 起動する
 
 ### 準備
